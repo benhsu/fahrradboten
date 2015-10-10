@@ -21,7 +21,7 @@
          }).
 
 -record(state, {
-          orders = [] :: [#order{}]
+          orders = dict:new() :: dict:dict()
          }).
 
 %%%===================================================================
@@ -69,73 +69,73 @@ assign(OrderID, Messenger) ->
 init([]) ->
     {ok, #state{}}.
 
-handle_call(all_ids, _From, State = #state{orders = OrderList}) ->
-    OrderIDs = lists:map(fun(#order{order_id = ID}) -> ID end, OrderList),
+handle_call(all_ids, _From, State = #state{orders = OrderDict}) ->
+    OrderIDs = lists:sort(dict:fetch_keys(OrderDict)),
     {reply, {ok, OrderIDs}, State};
-handle_call({assign, OrderID, Messenger}, _From, State = #state{orders = OrderList}) ->
-    NewOrderList =
-        case lists:keyfind(OrderID, 2, OrderList) of
-            false ->
-                OrderList;
-            Order ->
-                lists:keyreplace(
-                  OrderID, 2, OrderList,
-                  Order#order {
-                    status = in_progress,
-                    messenger = Messenger
-                   })
-        end,
-    {reply, ok, State#state{orders = NewOrderList}};
-handle_call({details, OrderID}, _From, State = #state{orders = OrderList}) ->
-    Resp = case lists:keyfind(OrderID, 2, OrderList) of
-               false ->
-                   {error, unknown_order_id};
-               Order ->
-                   {ok,
-                    {
-                      Order#order.pickup_location,
+handle_call({assign, OrderID, Messenger}, _From, State = #state{orders = OrderDict}) ->
+    NewOrderDict =
+				 % the # means "take Order and replace it"
+				 % this is cool! you can put a try-catch as a R Value
+				try
+						dict:update(OrderID,
+												fun(Order) -> Order#order{status=in_progress, messenger=Messenger} end, OrderDict)
+				catch
+						_:_ -> OrderDict
+				end,
+    {reply, ok, State#state{orders = NewOrderDict}};
+handle_call({details, OrderID}, _From, State = #state{orders = OrderDict}) ->
+    Resp = case dict:find(OrderID, OrderDict) of
+							 {ok, Order} ->
+									 {ok,
+										{
+											Order#order.pickup_location,
                       Order#order.dropoff_location,
                       Order#order.worth
-                    }
-                   }
-           end,
-    {reply, Resp, State};
-handle_call({delivered, OrderID}, _From, State = #state{orders = OrderList}) ->
-    NewOrderList = case lists:keyfind(OrderID, 2, OrderList) of
-                       false ->
-                           OrderList;
-                       Order ->
-                           lists:keyreplace(OrderID, 2, OrderList,
-                                            Order#order{status = completed})
-                   end,
-    {reply, ok, State#state{orders = NewOrderList}};
-handle_call(available, _From, State = #state{orders = OrderList}) ->
-    AvailableOrders = lists:filter(fun
-                                       (#order{status = available}) -> true;
+										}
+									 };
+							 error -> {error, unknown_order_id}
+					 end,
+		{reply, Resp, State};
+
+handle_call({delivered, OrderID}, _From, State = #state{orders = OrderDict}) ->
+    NewOrderDict =
+				 % the # means "take Order and replace it"
+				 % this is cool! you can put a try-catch as a R Value
+				try
+						dict:update(OrderID,
+												fun(Order) -> Order#order{status=completed} end, OrderDict)
+				catch
+						_:_ -> OrderDict
+				end,
+    {reply, ok, State#state{orders = NewOrderDict}};
+handle_call(available, _From, State = #state{orders = OrderDict}) ->
+    AvailableOrders = dict:filter(fun
+																			(#order{status = available}) -> true;
                                        (_)                          -> false
-                                   end, OrderList),
-    OrderIDS = lists:map(fun(#order{order_id = ID}) -> ID end, AvailableOrders),
+                                   end, OrderDict),
+    OrderIDS = lists:sort(dict:fetch_keys(AvailableOrders)),
     {reply, {ok, OrderIDS}, State};
-handle_call({submit, Order}, _From, State = #state{orders = OrderList}) ->
-    NewOrderList = [Order | OrderList],
-    {reply, ok, State#state{orders = NewOrderList}};
-handle_call({cancel, OrderID}, _From, State = #state{orders = OrderList}) ->
-    NewOrderList = lists:keydelete(OrderID, 2, OrderList),
-    {reply, ok, State#state{orders = NewOrderList}};
-handle_call({status, OrderID}, _From, State = #state{orders = OrderList}) ->
+handle_call({submit, Order}, _From, State = #state{orders = OrderDict}) ->
+    NewOrderDict = dict:store(Order#order.order_id, Order, OrderDict),
+    {reply, ok, State#state{orders = NewOrderDict}};
+handle_call({cancel, OrderID}, _From, State = #state{orders = OrderDict}) ->
+    NewOrderDict = dict:erase(OrderID, OrderDict),
+    {reply, ok, State#state{orders = NewOrderDict}};
+handle_call({status, OrderID}, _From, State = #state{orders = OrderDict}) ->
     %% Note: does not handle concept of being assigned by dispatch to a
     %% messenger
-    Resp = case lists:keyfind(OrderID, 2, OrderList) of
-               false -> {error, unknown_order_id};
-               Order ->
-                   case Order#order.status of
-                       available ->
-                           {ok, waiting_assignment};
-                       completed ->
-                           {ok, delivered};
-                       in_progress ->
-                           {ok, {assigned, Order#order.messenger}}
-                   end
+    Resp = try
+							 Order = dict:fetch(OrderID, OrderDict),
+							 case Order#order.status of
+									 available ->
+											 {ok, waiting_assignment};
+									 completed ->
+											 {ok, delivered};
+									 in_progress ->
+											 {ok, {assigned, Order#order.messenger}}
+							 end
+					 catch
+							 _:_ -> {error, unknown_order_id}
            end,
     {reply, Resp, State};
 handle_call(_Request, _From, State) ->
