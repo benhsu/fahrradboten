@@ -20,6 +20,8 @@ start_link() ->
 %%====================================================================
 
 init([]) ->
+    % responsible for 4 modules.
+    % "just memorize this""
     BillingSrv = {billing_srv,
                   {billing_srv, start_link, []},
                   permanent, 5000, worker, dynamic},
@@ -35,15 +37,16 @@ init([]) ->
     MapSrv = {map_srv,
               {map_srv, start_link, [graph_config()]},
               permanent, 5000, worker, dynamic},
-
+		% note that this just DECLARES a list of things to start, and OTP starts it
     Services = [MapSrv, BillingSrv, OrdersSrv, DispatchSrv],
-    {ok, {{one_for_all, 100, 1}, Services}}.
+    {ok, {{one_for_one, 100, 1}, Services}}.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
 graph_config() ->
+		% sys config
     case application:get_env(fahrradboten, graph) of
         {ok, Config} -> Config;
         undefined -> default_graph_config()

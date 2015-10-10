@@ -3,12 +3,15 @@
 -behaviour(gen_server).
 
 %% API
+%% these are the meat
 -export([start_link/1, path/2, distance/2, headquarters/0, verticies/0]).
 
 %% gen_server callbacks
+%% these are standard to gen server
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+% note the map:vertex and digraph:graph are types....
 -record(state, {
           headquarters :: map:vertex(),
           graph = digraph:new([]) :: digraph:graph()
@@ -20,6 +23,7 @@
 
 -export_type([vertex/0, path/0, distance/0]).
 
+%%% blt calls this a "gravestone"
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -27,6 +31,9 @@
 start_link(GraphConfig) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [GraphConfig], []).
 
+% dialyzer metsadata
+% "a path is a function that takes 2 arguments of vertex type, and returns either:
+% {ok, {PATH, DISTANCE}}, or {error, no_path}
 -spec path(A :: vertex(),
            B :: vertex()) -> {ok, {path(), distance()}} | {error, no_path}.
 path(A, B) ->
@@ -57,8 +64,11 @@ verticies() ->
 
 init([GraphConfig]) ->
     {headquarters, HQ} = lists:keyfind(headquarters, 1, GraphConfig),
+    % graph the state
     State = #state{headquarters = HQ},
+    % interp will side effect modify the graph. this is possible because digraphs are ets tables :(
     interp(State#state.graph, GraphConfig),
+		% OTP magick, you need a state!
     {ok, State}.
 
 handle_call(verticies, _From, State) ->

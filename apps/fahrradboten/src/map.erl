@@ -1,5 +1,8 @@
 -module(map).
 
+%%% abstraction on top of map_srv, we might not want the client to know
+%%% its a server
+
 -export([path/2, distance/2, headquarters/0, verticies/0]).
 
 -type vertex() :: map_srv:vertex().

@@ -1,5 +1,6 @@
 -module(dispatch_messenger).
 
+% this is a gen_fsm
 -behaviour(gen_fsm).
 
 %% API

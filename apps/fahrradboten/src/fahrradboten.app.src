@@ -1,11 +1,17 @@
 {application, fahrradboten,
+
+% this is meta data for booting the app
  [
   {description, "An OTP application"},
   {vsn, "0.1.0"},
   {registered, []},
+% calls into fahrraboten_app module
   {mod, {fahrradboten_app, []}},
   {applications,
    [
+% list of apps that need to come up _BEFORE_ this
+% kernel and stdlib are normal
+% exometer is monitroing. datadog!
     kernel,
     stdlib,
     exometer_core
